@@ -14,9 +14,10 @@ def makeDir(p):
     try:
         os.mkdir(p)
     except OSError:
-        print("Creation of the directory %s failed" % p)
+        print(
+            "---***(T_T ) Creation of the directory %s failed or already existed***---" % p)
     else:
-        print("Successfully created the directory %s " % p)
+        print("---***(’v‘ ) Successfully created the directory %s ***----" % p)
 
 
 def getType(item):
@@ -41,7 +42,7 @@ def getTerm(item, keyword, isTxt=True):
     except AttributeError as e1:
         thisTerm = 'N/A'
         print(e1)
-        print("------(QwQ )Not Found------")
+        print("---***(QwQ ) Item Not Found***---")
         if thisTerm == None:
             thisTerm = 'N/A'
             return thisTerm
@@ -54,7 +55,7 @@ def getTerm(item, keyword, isTxt=True):
     except TypeError as e2:
         thisTerm = 'N/A'
         print(e2)
-        print("------(QwQ )Not Found------")
+        print("---***(QwQ ) Item Not Found***---")
         if thisTerm == None:
             thisTerm = 'N/A'
             return thisTerm
@@ -129,8 +130,7 @@ def download(URL, path):
     reqst = urllib.request.Request(URL, headers={'User-Agent': 'Mozilla/5.0'})
     try:
         pic = urllib.request.urlopen(reqst)
-        print('downloading:' + URL)
-        print(path)
+        print('downloading: ' + URL + '...')
         path = os.path.abspath(path)
         with open(path, 'wb') as localFile:
             localFile.write(pic.read())
@@ -138,31 +138,45 @@ def download(URL, path):
         print(e)
 
 
-def getMedia(item, sendTime, tp, file_path):
-    if tp == 'Photo':
-        links = getTerm(item, 'photoLinks')
-        suffix = '.jpg'
-        pos1 = links.find('"orign":"')
-        if pos1 != -1:
-            chopped = links[pos1+9:]
-            pos2 = chopped.find('"')
-            url = chopped[: pos2]
-            print(url)
+def getPhotos(item, sendTime):
+    link_str = getTerm(item, 'photoLinks')
+    pic_num = link_str.count('"orign":"')
+    link_list = link_str.split('"orign":"')
+    link_list = link_list[1:]
+    suffix = '.jpg'
+    i = 1
+    output_links = []
+    output_names = []
+    for links in link_list:
+        if pic_num != 0:
+            pos2 = links.find('"')
+            url = links[: pos2]
+            name = 'Photo/' + str(sendTime) + '_#' + str(i) + suffix
+            download(url, name)
         else:
-            return 'N/A'
-    if tp == 'Video':
-        links = getTerm(item, 'embed')
-        suffix = '.mp4'
-        pos1 = links.find('"video_down_url":"')
-        if pos1 != -1:
-            chopped = links[pos1+18:]
-            pos2 = chopped.find('"')
-            url = chopped[:pos2]
-            print(url)
-        else:
-            return 'N/A'
-    name = file_path + '/' + str(sendTime) + suffix
-    print(name)
+            url = 'N/A'
+            name = 'Photo/' + str(sendTime) + '_#' + str(i) + suffix
+        print('Name: ' + name)
+        print('URL: ' + url + '\n')
+        output_links.append(url)
+        output_names.append(name)
+        i += 1
+    return [output_names, output_links]
+
+
+def getVideo(item, sendTime):
+    links = getTerm(item, 'embed')
+    suffix = '.mp4'
+    pos1 = links.find('"video_down_url":"')
+    if pos1 != -1:
+        chopped = links[pos1+18:]
+        pos2 = chopped.find('"')
+        url = chopped[:pos2]
+    else:
+        url = 'N/A'
+    name = 'Video/' + str(sendTime) + suffix
+    print('Name: ' + name)
+    print('URL: ' + url + '\n')
     download(url, name)
     return [name, url]
 
@@ -210,7 +224,10 @@ def addArchive(t, d, p, f, l, cm, cn, tag):
 def grabMedia(item, tp):
     title = getTitle(item)
     time = getTime(item)
-    file, link = getMedia(item, time[0], tp, tp)
+    if tp == 'Video':
+        file, link = getVideo(item, time[0])
+    else:
+        file, link = getPhotos(item, time[0])
     cm = getComments(item)
     cn = getCaption(item)
     tag = getTerm(item, 'tag')
@@ -223,7 +240,7 @@ def grabText(item, tp):
     ts = time[0]
     cn = getContent(item)
     file = 'Text/'+str(ts)+'.txt'
-    text_file = open(file, "w")
+    text_file = open(file, "w", encoding="utf-8")
     n = text_file.write(cn)
     text_file.close()
     cm = getComments(item)
@@ -242,30 +259,28 @@ def grabMusic(item, tp):
     addArchive(title, time[1], tp, file, link, cm, cn, tag)
 
 
-def save_my_lofter(src):
+def save_my_lofter(src, tree):
     for p in ['Video', 'Photo', 'Text']:
         try:
             with open(os.path.abspath(p)) as f:
-                print(f.readlines())
+                print("Directory " + p + ' Already Existed.')
         except IOError:
+            print("Start creating Directory " + p + '...')
             makeDir(p)
-            print("Create Directory " + p)
 
-    tree = ET.parse(src)
     items = tree.findall('.//PostItem')
     i = 1
     for item in items:
         tp = getType(item)
+        print('Start Processing Post No.' + str(i) + ' of type ' + tp + '...')
         if tp == 'Video' or tp == 'Photo':
             grabMedia(item, tp)
-            print(tp)
+
         elif tp == 'Text':
             grabText(item, tp)
-            print(tp)
         else:
             grabMusic(item, tp)
-            print(tp)
-        print(i)
+        print('Finish Processing Post No.' + str(i) + '\n')
         i += 1
 
     data = {'标题':  Title,
@@ -287,5 +302,20 @@ def save_my_lofter(src):
 
 
 if __name__ == "__main__":
-    src = input('请输入你的Lofter日志文件名称（含.xml后缀）：')
-    save_my_lofter(src)
+    begin = False
+    found_tree = False
+    while not begin:
+        try:
+            src = input('请输入你的Lofter日志文件名称（含.xml后缀）：')
+            if src == 'Q':
+                break
+            tree = ET.parse(src)
+            begin = True
+            found_tree = True
+        except:
+            print('请确认文件名称后再次输入，或输入Q退出。')
+    if found_tree:
+        try:
+            save_my_lofter(src, tree)
+        except:
+            print('运行错误，输出终止。请在GitHub留言。')
